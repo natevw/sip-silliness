@@ -5,6 +5,22 @@ var PORT = 8080;
 
 // http://tools.ietf.org/html/rfc3261
 
+var FAKE_SDP = [
+    "v=0",
+    "o=- 1414736453061 1414736453062 IN IP4 192.168.1.16",
+    "s=-",
+    "c=IN IP4 192.168.1.16",
+    "t=0 0",
+    "m=audio 51234 RTP/AVP 96 97 3 0 8 127",
+    "a=rtpmap:96 GSM-EFR/8000",
+    "a=rtpmap:97 AMR/8000",
+    "a=rtpmap:3 GSM/8000",
+    "a=rtpmap:0 PCMU/8000",
+    "a=rtpmap:8 PCMA/8000",
+    "a=rtpmap:127 telephone-event/8000",
+    "a=fmtp:127 0-15", ''
+].join('\r\n');
+
 
 var MULTI_HEADERS = {'via':true, 'contact':true};
 
@@ -49,6 +65,18 @@ function formResponse(res) {
     return lines.join('\r\n');
 }
 
+function formRequest(req) {
+    // HACK: swapperoos to reuse code
+    return formResponse({
+      sipVersion: req.method,
+      statusCode: req.uri,
+      reasonPhrase: req.sipVersion,
+      headers: req.headers,
+      bodyLines: req.bodyLines
+    });
+}
+
+
 net.createServer(function (socket) {
   var remote = util.format("%s:%s", socket.remoteAddress, socket.remotePort);
   console.log("connection from %s", remote);
@@ -76,12 +104,34 @@ net.createServer(function (socket) {
         res.headers['Contact'] = req.headers['Contact'];
     } else if (req.method === 'OPTIONS') {
         res.headers['Content-Type'] = "application/sdp";
-        res.headers['Content-Length'] = 5;
-        res.bodyLines = ['v=0',''];
+        //res.headers['Content-Length'] = 5;
+        //res.bodyLines = ['v=0',''];
     }
     socket.write(d = formResponse(res));
     console.log(d);
   });
+  
+  setTimeout(function () {
+      var uri = "sip:test@sip.ipcalf.com:8080";
+      var req = {
+          method: "INVITE",
+          uri: uri,
+          sipVersion: "SIP/2.0",
+          headers: {
+            'Call-ID': 42,
+            'CSeq': "1 INVITE",
+            'Via': "SIP/2.0/TCP 0.0.0.0:0",
+            'To': "<"+uri+">",
+            'From': "\"Hey Howdy\" <sip:me@ipcalf.com>",
+            'Content-Length': FAKE_SDP.length
+          },
+          bodyLines: [FAKE_SDP]
+      };
+    socket.write(d = formRequest(req));
+    console.log(d);
+  }, 5e3);
+  
+  
   socket.on('close', function () {
     console.log("%s connection closed.", remote);
   });
