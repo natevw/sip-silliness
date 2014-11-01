@@ -137,4 +137,66 @@ net.createServer(function (socket) {
   });
 }).listen(PORT, function () {
   console.log("listening on", this.address().port);
+}).unref();
+
+
+var dgram = require('dgram');
+
+var socket = dgram.createSocket('udp4', function (msg, rinfo) {
+    var d = msg.toString('utf8');
+    console.log(d);
 });
+//socket.unref();
+
+var num = "xxx",
+    localAddr = "xxx";
+
+
+var FAKE_SDP2 = [
+    "v=0",
+    "o=- 1414816145121 1414816145130 IN IP4 "+localAddr,
+    "s=-",
+    "c=IN IP4 "+localAddr,
+    "t=0 0",
+    "m=audio 45848 RTP/AVP 96 97 3 0 8 127",
+    "a=rtpmap:96 GSM-EFR/8000",
+    "a=rtpmap:97 AMR/8000",
+    "a=rtpmap:3 GSM/8000",
+    "a=rtpmap:0 PCMU/8000",
+    "a=rtpmap:8 PCMA/8000",
+    "a=rtpmap:127 telephone-event/8000",
+    "a=fmtp:127 0-15", ''
+].join('\r\n');
+
+function inviteInfo(uri, localAddr, localPort) {
+  var local = localAddr+":"+localPort;
+  return {
+    method: "INVITE",
+    uri: uri+":5060",
+    sipVersion: "SIP/2.0",
+    headers: {
+      'Call-ID': "abc123@192.168.1.16",
+      'CSeq': "4000 INVITE",
+      'From': "\""+num+"\" <sip:"+num+"@sipgate.co.uk>;tag=99",
+      'To': "<"+uri+">",
+      'Via': "SIP/2.0/UDP "+local+";branch=abc;rport",
+      'Max-Forwards': 70,
+      'Contact': "\""+num+"\" <sip:"+num+"@"+local+";transport=udp>",
+      'Content-Type': "application/sdp",
+      'Proxy-Authorization': "Digest username=\""+num+"\",realm=\"sipgate.co.uk\",nonce=\"xx\",uri=\"sip:"+num+"@sipgate.co.uk:5060\",response=\"xx\"",
+      'Content-Length': FAKE_SDP2.length,
+    },
+    bodyLines: [FAKE_SDP2]
+  };
+}
+
+socket.bind(0, function () {
+  console.log("udp on", this.address().port);
+  var invite = inviteInfo("sip:"+num+"@sipgate.co.uk", localAddr, this.address().port),
+      msg = formRequest(invite),
+      buf = Buffer(msg);
+  console.log(msg);
+  socket.send(buf, 0, buf.length, 5060, "sipgate.co.uk");
+});
+
+
